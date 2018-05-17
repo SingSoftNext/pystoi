@@ -69,11 +69,47 @@ def remove_silent_frames(x, y, dyn_range, framelen, hop):
         y without the silent frames (aligned to x)
     """
     # Compute Mask
+    #!!!
+    x = np.zeros(16)
+    framelen = 8
+    hop = 4
+    noverlap = framelen - hop
+
+    # Pad x to integer number of bins and for endpoint reconstruction
+    pad = ...
+    #!!!
     w = scipy.hanning(framelen + 2)[1:-1]
+    #!!! Testing reconstruction
+    from scipy import signal
+    w = np.sqrt(signal.hann(framelen, False))
+    w = signal.hann(framelen, False)
+    print(f'COLA: {signal.check_COLA(w, framelen, noverlap)}')
+    x = np.random.uniform(-1, 1, len(x) + 2 * framelen)
+    print(f'x old: {len(x)}')
+    nbins = 1 + (len(x) - framelen) // hop
+    x = x[:(nbins - 1) * hop + framelen]  # eliminate partial bins
+    print(f'x new: {len(x)}')
+    x[:framelen] = 0
+    x[-framelen:] = 0
+    print(f'#bins: {1 + (len(x) - framelen) // hop}')
+    y = x
+
+    # Calculate normalization so overlap-add works
+    ola_denom = np.zeros_like(x)
+    for i in range(nbins):
+        ola_denom[i*hop:i*hop+framelen] += w
+    #!!!
+    # mask = np.array([20 * np.log10(np.linalg.norm(w * x[i:i + framelen]) + EPS)
+    #                  for i in range(0, len(x) - framelen, hop)])
     mask = np.array([20 * np.log10(np.linalg.norm(w * x[i:i + framelen]) + EPS)
-                     for i in range(0, len(x) - framelen, hop)])
+                     for i in range(0, len(x) - framelen + 1, hop)])
     mask += dyn_range - np.max(mask)
     mask = mask > 0
+    #!!!
+    mask[:] = True
+    print(f'len(mask): {len(mask)}')
+    print(f'#True:     {np.sum(mask)}')
+    #!!!
     # Remove silent frames
     count = 0
     x_sil = np.zeros(x.shape)
@@ -88,6 +124,18 @@ def remove_silent_frames(x, y, dyn_range, framelen, hop):
     # Cut unused length
     x_sil = x_sil[:sil_ind[-1] + 1]
     y_sil = y_sil[:sil_ind[-1] + 1]
+    #!!!
+    x = x[framelen:-framelen]
+    x_sil = x_sil[framelen:-framelen]
+    ola_denom = ola_denom[framelen:-framelen]
+    print(f'ola_demom avg: {np.mean(ola_denom):0.2f}')
+    print(f'ola_denom std: {np.std(ola_denom):0.2f}')
+    x_sil /= ola_denom
+    print(f'Close?: {np.allclose(x, x_sil)}')
+    print(f'delta max: {np.max(np.abs(x - x_sil)):0.2f}')
+    print(f'arg max: {np.argmax(np.abs(x - x_sil))}')
+    exit()
+    #!!!
     return x_sil, y_sil
 
 
